@@ -10,11 +10,11 @@ import lombok.Data;
 
 import java.util.List;
 
-public class Endopints extends AbstractVerticle {
+public class Endpoints extends AbstractVerticle {
 
     private final BrokeService brokeService;
 
-    public Endopints(final BrokeService brokeService) {
+    public Endpoints(final BrokeService brokeService) {
         this.brokeService = brokeService;
     }
 
@@ -52,12 +52,51 @@ public class Endopints extends AbstractVerticle {
 
                     final var result = brokeService.postMessages(body.messages, topicName, groupId);
 
-                    final var response = new PostMessagesResponse();
-                    response.setItems(result);
+                    ctx.response()
+                            .setStatusCode(HttpResponseStatus.OK.code())
+                            .end(Json.encode(result));
+                });
+
+        router.route(HttpMethod.POST, "/topic/:topicName/:groupId/subscribe")
+                .handler(ctx -> {
+                    final var topicName = ctx.request().getParam("topicName");
+                    final var groupId = ctx.request().getParam("groupId");
+
+                    final var result = brokeService.subscribe(topicName, groupId);
 
                     ctx.response()
                             .setStatusCode(HttpResponseStatus.OK.code())
-                            .end(Json.encode(response));
+                            .end(Json.encode(result));
+                });
+
+        router.route(HttpMethod.DELETE, "/:subscriptionId")
+                .handler(ctx ->{
+                    final var subscriptionId = ctx.request().getParam("subscriptionId");
+
+                    final var result = brokeService.unsubscribe(subscriptionId);
+
+                    final var responseCode = result ? HttpResponseStatus.OK.code() : HttpResponseStatus.BAD_REQUEST.code();
+
+                    ctx.response()
+                            .setStatusCode(responseCode)
+                            .end(Json.encode(result));
+                });
+
+        router.route(HttpMethod.GET, "/:subscriptionId/")
+                .handler(ctx -> {
+                    final var subscriptionId = ctx.request().getParam("subscriptionId");
+
+                    String queryUpTo = ctx.queryParams().get("upTo");
+                    final var upTo = (queryUpTo != null) ? Integer.parseInt(queryUpTo) : 100;
+
+                    String queryWait = ctx.queryParams().get("wait");
+                    final var wait = (queryWait != null) ? Integer.parseInt(queryWait) : 100;
+
+                    final var result = brokeService.fetch(subscriptionId, upTo, wait);
+
+                    ctx.response()
+                            .setStatusCode(HttpResponseStatus.OK.code())
+                            .end(Json.encode(result));
                 });
     }
 
@@ -69,12 +108,5 @@ public class Endopints extends AbstractVerticle {
 
     @Data private static class PostMessagesRequest {
         private List<String> messages;
-    }
-
-    @Data private static class PostMessagesResponse {
-        private List<Long> items;
-
-        public void setItems(final List<Long> result) {
-        }
     }
 }
